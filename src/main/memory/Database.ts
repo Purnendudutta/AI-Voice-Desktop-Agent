@@ -10,7 +10,7 @@ export class AppDatabase {
   private dbPath: string;
 
   constructor(customPath?: string) {
-    const dataDir = customPath || path.join(process.env.APPDATA || process.cwd(), 'ai-voice-desktop-agent');
+    const dataDir = customPath || path.join(process.cwd(), 'data');
     if (!fs.existsSync(dataDir)) {
       try {
         fs.mkdirSync(dataDir, { recursive: true });
@@ -19,6 +19,16 @@ export class AppDatabase {
       }
     }
     this.dbPath = path.join(dataDir, 'agent_storage.sqlite');
+
+    // Automatically migrate from %APPDATA% if local DB doesn't exist yet
+    try {
+      const legacyPath = path.join(process.env.APPDATA || '', 'ai-voice-desktop-agent', 'agent_storage.sqlite');
+      if (!fs.existsSync(this.dbPath) && legacyPath && fs.existsSync(legacyPath)) {
+        fs.copyFileSync(legacyPath, this.dbPath);
+      }
+    } catch {
+      // ignore migration error
+    }
   }
 
   public async initialize(): Promise<void> {

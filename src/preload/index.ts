@@ -45,6 +45,7 @@ const api: ElectronAPI = {
 
   getWorkspaces: () => ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_LIST),
   startWorkspace: (id) => ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_START, id),
+  createWorkspace: (workspace) => ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_CREATE, workspace),
 
   getWorkflows: () => ipcRenderer.invoke(IPC_CHANNELS.WORKFLOW_LIST),
   runWorkflow: (id) => ipcRenderer.invoke(IPC_CHANNELS.WORKFLOW_RUN, id),

@@ -49,11 +49,26 @@ export class PermissionEngine {
     };
 
     return new Promise<boolean>((resolve) => {
-      this.pendingRequests.set(id, { resolve, request: fullRequest });
+      const timer = setTimeout(() => {
+        if (this.pendingRequests.has(id)) {
+          this.pendingRequests.delete(id);
+          resolve(false);
+        }
+      }, 45000);
+
+      this.pendingRequests.set(id, {
+        resolve: (approved: boolean) => {
+          clearTimeout(timer);
+          resolve(approved);
+        },
+        request: fullRequest,
+      });
+
       if (this.onPromptCallback) {
         this.onPromptCallback(fullRequest);
       } else {
         // Safe default if no UI attached: reject high risk
+        clearTimeout(timer);
         resolve(false);
       }
     });

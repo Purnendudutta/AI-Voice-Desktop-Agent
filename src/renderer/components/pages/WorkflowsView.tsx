@@ -86,6 +86,9 @@ export const WorkflowsView: React.FC = () => {
       updatedAt: Date.now(),
     };
 
+    if (window.electronAPI) {
+      await window.electronAPI.createWorkspace(newWs);
+    }
     setWorkspaces([...workspaces, newWs]);
     setShowAddWorkspace(false);
     setWsName('');

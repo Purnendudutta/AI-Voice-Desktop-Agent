@@ -16,6 +16,8 @@ release/
 *.db
 *.tmp
 audit_logs.json
+data/cache/
+data/*.sqlite
 
 # TypeScript build info
 *.tsbuildinfo

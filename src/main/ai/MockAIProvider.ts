@@ -311,6 +311,74 @@ export class MockAIProvider implements AIProvider {
         recoveryAttempts: 0,
         maxRecoveryAttempts: 2,
       });
+    } else if (lower.includes('screenshot') || lower.includes('capture screen')) {
+      steps.push({
+        id: `step_${taskId}_1`,
+        order: 1,
+        title: 'Capturing Desktop Screen',
+        description: 'Capture active screen for visual diagnosis',
+        tool: 'capture_screen',
+        arguments: {},
+        status: 'pending',
+        riskLevel: 'LOW',
+        requiresConfirmation: false,
+        recoveryAttempts: 0,
+        maxRecoveryAttempts: 2,
+      });
+    } else if (lower.includes('search') || lower.includes('find file')) {
+      const query = goal.replace(/^(search|find|look for)\s*(files?)?\s*(for)?\s*/i, '').trim() || '*';
+      steps.push({
+        id: `step_${taskId}_1`,
+        order: 1,
+        title: `Searching for files matching "${query}"`,
+        description: 'Search workspace files matching query',
+        tool: 'search_files',
+        arguments: { query, directory: '.' },
+        status: 'pending',
+        riskLevel: 'LOW',
+        requiresConfirmation: false,
+        recoveryAttempts: 0,
+        maxRecoveryAttempts: 2,
+      });
+    } else if (
+      lower.includes('explorer') ||
+      lower.includes('file manager') ||
+      lower === 'files' ||
+      lower === 'open files'
+    ) {
+      steps.push({
+        id: `step_${taskId}_1`,
+        order: 1,
+        title: 'Opening File Explorer',
+        description: 'Launch Windows File Explorer',
+        tool: 'open_application',
+        arguments: { appName: 'explorer' },
+        status: 'pending',
+        riskLevel: 'LOW',
+        requiresConfirmation: false,
+        recoveryAttempts: 0,
+        maxRecoveryAttempts: 2,
+      });
+    } else if (
+      lower.includes('hello') ||
+      lower.includes('hi') ||
+      lower.includes('who are you') ||
+      lower.includes('what can you do') ||
+      lower.includes('help')
+    ) {
+      steps.push({
+        id: `step_${taskId}_1`,
+        order: 1,
+        title: `Assisting user query: "${goal.substring(0, 30)}"`,
+        description: `I am ${_agentName}, your desktop AI operating layer. I can launch applications (terminal, notepad, calculator, browser), inspect git repos, run tests, organize files, and automate desktop workflows.`,
+        tool: 'get_system_status',
+        arguments: {},
+        status: 'pending',
+        riskLevel: 'LOW',
+        requiresConfirmation: false,
+        recoveryAttempts: 0,
+        maxRecoveryAttempts: 2,
+      });
     } else {
       // Default general step
       steps.push({

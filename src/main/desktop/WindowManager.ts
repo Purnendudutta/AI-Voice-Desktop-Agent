@@ -1,4 +1,4 @@
-import { exec } from 'node:child_process';
+import { exec, spawn } from 'node:child_process';
 import os from 'node:os';
 
 export interface WindowInfo {
@@ -62,31 +62,69 @@ export class WindowManager {
     }
 
     return new Promise((resolve) => {
-      const lower = appName.toLowerCase().trim();
-      let command = `start "" "${appName}"`;
+      try {
+        const lower = appName.toLowerCase().trim();
+        let child;
 
-      if (
-        lower.includes('terminal') ||
-        lower.includes('powershell') ||
-        lower.includes('command prompt') ||
-        lower === 'cmd'
-      ) {
-        command = 'start powershell';
-      } else if (lower.includes('code') || lower.includes('visual studio code')) {
-        command = pathTarget ? `code "${pathTarget}"` : 'code .';
-      } else if (lower.includes('chrome') || lower.includes('browser')) {
-        command = pathTarget ? `start chrome "${pathTarget}"` : 'start chrome';
-      } else if (lower.includes('notepad') || lower.includes('text editor')) {
-        command = pathTarget ? `notepad "${pathTarget}"` : 'notepad';
-      } else if (lower.includes('calc')) {
-        command = 'calc';
-      } else if (lower.includes('explorer') || lower.includes('file manager') || lower.includes('files')) {
-        command = pathTarget ? `explorer "${pathTarget}"` : 'explorer';
+        if (
+          lower.includes('terminal') ||
+          lower.includes('powershell') ||
+          lower.includes('command prompt') ||
+          lower === 'cmd'
+        ) {
+          child = spawn('powershell.exe', ['-NoExit'], {
+            detached: true,
+            stdio: 'ignore',
+            cwd: pathTarget || process.cwd(),
+          });
+        } else if (lower.includes('notepad') || lower.includes('text editor')) {
+          child = spawn('notepad.exe', pathTarget ? [pathTarget] : [], {
+            detached: true,
+            stdio: 'ignore',
+          });
+        } else if (lower.includes('calc')) {
+          child = spawn('calc.exe', [], {
+            detached: true,
+            stdio: 'ignore',
+          });
+        } else if (lower.includes('code') || lower.includes('visual studio code')) {
+          child = spawn('cmd.exe', ['/c', 'code', pathTarget || '.'], {
+            detached: true,
+            stdio: 'ignore',
+          });
+        } else if (lower.includes('chrome') || lower.includes('browser')) {
+          const args = pathTarget ? ['/c', 'start', 'chrome', pathTarget] : ['/c', 'start', 'chrome'];
+          child = spawn('cmd.exe', args, {
+            detached: true,
+            stdio: 'ignore',
+          });
+        } else if (lower.includes('explorer') || lower.includes('file manager') || lower.includes('files')) {
+          child = spawn('explorer.exe', pathTarget ? [pathTarget] : [], {
+            detached: true,
+            stdio: 'ignore',
+          });
+        } else {
+          // General application or command
+          child = spawn('cmd.exe', ['/c', 'start', '""', appName], {
+            detached: true,
+            stdio: 'ignore',
+          });
+        }
+
+        child.on('error', () => {
+          resolve(false);
+        });
+
+        // Unreference the child process so parent process does not wait on it
+        child.unref();
+
+        // Brief tick to ensure no immediate spawn error
+        setTimeout(() => {
+          resolve(true);
+        }, 100);
+      } catch {
+        resolve(false);
       }
-
-      exec(command, { timeout: 5000 }, (err) => {
-        resolve(!err);
-      });
     });
   }
 

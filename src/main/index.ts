@@ -16,6 +16,17 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { IPC_CHANNELS } from '../shared/types/ipc';
 
+// Relocate userData and caches directly into project repository data/cache directory
+try {
+  const localCacheDir = path.join(process.cwd(), 'data', 'cache');
+  if (!fs.existsSync(localCacheDir)) {
+    fs.mkdirSync(localCacheDir, { recursive: true });
+  }
+  app.setPath('userData', localCacheDir);
+} catch {
+  // fallback
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 import { AppDatabase } from './memory/Database';
@@ -291,6 +302,11 @@ async function createWindow() {
 
   ipcMain.handle(IPC_CHANNELS.WORKSPACE_START, async (_event, workspaceId) => {
     return workspaceManager.restoreWorkspace(workspaceId);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_CREATE, async (_event, workspace) => {
+    db.saveWorkspace(workspace);
+    return workspace;
   });
 
   ipcMain.handle(IPC_CHANNELS.WORKFLOW_LIST, async () => {

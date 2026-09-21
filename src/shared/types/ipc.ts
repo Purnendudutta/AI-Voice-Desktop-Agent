@@ -36,6 +36,7 @@ export const IPC_CHANNELS = {
   MEMORY_DELETE: 'memory:delete',
   WORKSPACE_LIST: 'workspace:list',
   WORKSPACE_START: 'workspace:start',
+  WORKSPACE_CREATE: 'workspace:create',
   WORKFLOW_LIST: 'workflow:list',
   WORKFLOW_RUN: 'workflow:run',
   WORKFLOW_CREATE: 'workflow:create',
@@ -82,6 +83,7 @@ export interface ElectronAPI {
   deleteMemoryItem: (id: string) => Promise<boolean>;
   getWorkspaces: () => Promise<WorkspaceConfig[]>;
   startWorkspace: (workspaceId: string) => Promise<boolean>;
+  createWorkspace: (workspace: WorkspaceConfig) => Promise<WorkspaceConfig>;
   getWorkflows: () => Promise<AutomationWorkflow[]>;
   runWorkflow: (workflowId: string) => Promise<boolean>;
   createWorkflow: (workflow: Omit<AutomationWorkflow, 'id' | 'createdAt'>) => Promise<AutomationWorkflow>;

@@ -121,8 +121,8 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={onOpenSettings}
           className={`flex items-center gap-1.5 px-3 py-1 rounded-full border cursor-pointer transition-all ${
             config.ai.provider === 'gemini' && config.ai.geminiApiKey
-              ? 'bg-violet-500/15 hover:bg-violet-500/25 text-violet-200 border-violet-500/40 font-semibold shadow-[0_0_12px_rgba(139,92,246,0.2)]'
-              : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 border-emerald-500/40 font-semibold shadow-[0_0_12px_rgba(16,185,129,0.25)]'
+              ? 'bg-dark-850 hover:bg-dark-800 text-violet-300 border-violet-500/60 font-semibold shadow-[0_0_12px_rgba(139,92,246,0.2)]'
+              : 'bg-dark-850 hover:bg-dark-800 text-emerald-300 border-emerald-500/60 font-semibold shadow-[0_0_12px_rgba(16,185,129,0.2)]'
           }`}
           title="Click to configure AI Model & Gemini API key in Settings"
         >
@@ -136,7 +136,9 @@ export const Header: React.FC<HeaderProps> = ({
           ) : (
             <Cpu className="w-3.5 h-3.5 text-emerald-400" />
           )}
-          <span>{config.ai.provider === 'gemini' && config.ai.geminiApiKey ? 'GEMINI CLOUD' : 'LOCAL MODE'}</span>
+          <span className="font-bold tracking-wide">
+            {config.ai.provider === 'gemini' && config.ai.geminiApiKey ? 'GEMINI CLOUD' : 'LOCAL MODE'}
+          </span>
         </button>
       </div>
     </header>
