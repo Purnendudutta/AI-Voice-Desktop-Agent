@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Build outputs
+dist/
+dist-electron/
+out/
+build/
+release/
+
+# Local databases and audit stores
+*.sqlite
+*.sqlite3
+*.db
+*.tmp
+audit_logs.json
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment & Credentials
+.env
+.env.local
+.env.*.local
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
