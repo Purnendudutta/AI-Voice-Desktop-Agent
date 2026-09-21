@@ -24,6 +24,16 @@ export const ActivityView: React.FC = () => {
     }
   };
 
+  const handleExport = () => {
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(events, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `agent_audit_log_${Date.now()}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
   const filtered = events.filter((e) => {
     if (filterRisk === 'ALL') return true;
     return e.riskLevel === filterRisk;
@@ -60,8 +70,17 @@ export const ActivityView: React.FC = () => {
           </div>
 
           <button
+            onClick={handleExport}
+            disabled={events.length === 0}
+            className="p-2 text-slate-400 hover:text-cyan-400 disabled:opacity-40 bg-dark-900 border border-slate-800 rounded-lg transition-colors cursor-pointer"
+            title="Export audit log to JSON"
+          >
+            <Download className="w-4 h-4" />
+          </button>
+
+          <button
             onClick={handleClear}
-            className="p-2 text-slate-500 hover:text-rose-400 bg-dark-900 border border-slate-800 rounded-lg transition-colors"
+            className="p-2 text-slate-500 hover:text-rose-400 bg-dark-900 border border-slate-800 rounded-lg transition-colors cursor-pointer"
             title="Clear audit log"
           >
             <Trash2 className="w-4 h-4" />

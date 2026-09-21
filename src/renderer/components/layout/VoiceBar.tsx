@@ -32,15 +32,19 @@ export const VoiceBar: React.FC<VoiceBarProps> = ({
   const [text, setText] = useState('');
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && text.trim()) {
-      onSendPrompt(text.trim());
-      setText('');
+    if (e.key === 'Enter') {
+      const promptToSend = text.trim() || (interimTranscript && !interimTranscript.startsWith('Listening') ? interimTranscript.replace(/^Heard:\s*"/, '').replace(/"$/, '').trim() : '');
+      if (promptToSend) {
+        onSendPrompt(promptToSend);
+        setText('');
+      }
     }
   };
 
   const handleSend = () => {
-    if (text.trim()) {
-      onSendPrompt(text.trim());
+    const promptToSend = text.trim() || (interimTranscript && !interimTranscript.startsWith('Listening') ? interimTranscript.replace(/^Heard:\s*"/, '').replace(/"$/, '').trim() : '');
+    if (promptToSend) {
+      onSendPrompt(promptToSend);
       setText('');
     }
   };
@@ -49,6 +53,19 @@ export const VoiceBar: React.FC<VoiceBarProps> = ({
 
   return (
     <div className="border-t border-slate-800/80 bg-dark-900/95 backdrop-blur-md px-6 py-3 space-y-2">
+      {/* Real-time Voice Transcription Banner */}
+      {interimTranscript && (
+        <div className="max-w-4xl mx-auto px-3.5 py-1.5 rounded-lg bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 text-xs flex items-center justify-between font-mono animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+            <span>{interimTranscript}</span>
+          </div>
+          {interimTranscript.startsWith('Heard:') && (
+            <span className="text-[10px] text-cyan-400/80">Press ENTER or click Send</span>
+          )}
+        </div>
+      )}
+
       {/* Microphone Error Notification Banner */}
       {micError && (
         <div className="max-w-4xl mx-auto p-2.5 rounded-xl bg-rose-950/80 border border-rose-800/80 text-rose-300 text-xs flex items-center gap-2 font-sans animate-in fade-in">
@@ -109,19 +126,15 @@ export const VoiceBar: React.FC<VoiceBarProps> = ({
         <div className="relative flex-1">
           <input
             type="text"
-            value={interimTranscript ? `Listening: "${interimTranscript}"` : text}
+            value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={
               isRecording
-                ? `Listening to your voice... (Say "${agentName}..." or a command)`
-                : `Tell ${agentName || 'your agent'} a goal... (e.g. "Prepare my dev workspace", "Organize Downloads")`
+                ? `Listening to your voice... (or type your goal here and press Enter)`
+                : `Tell ${agentName || 'your agent'} a goal... (e.g. "open terminal", "organize downloads")`
             }
-            className={`w-full bg-dark-950/80 text-sm rounded-xl px-4 py-3 border focus:outline-none transition-all font-sans ${
-              isRecording
-                ? 'border-rose-500/60 ring-1 ring-rose-500/30 text-rose-200 placeholder-rose-400/60'
-                : 'text-slate-100 placeholder-slate-500 border-slate-800 focus:border-cyan-500/80 focus:ring-1 focus:ring-cyan-500/40'
-            }`}
+            className="w-full bg-dark-950/80 text-sm rounded-xl px-4 py-3 border text-slate-100 placeholder-slate-500 border-slate-800 focus:border-cyan-500/80 focus:ring-1 focus:ring-cyan-500/40 focus:outline-none transition-all font-sans"
           />
           <div className="absolute right-3 top-3 text-slate-600 flex items-center gap-1 text-[11px] font-mono pointer-events-none">
             <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
@@ -132,8 +145,9 @@ export const VoiceBar: React.FC<VoiceBarProps> = ({
         {/* Send Action */}
         <button
           onClick={handleSend}
-          disabled={!text.trim()}
+          disabled={!text.trim() && (!interimTranscript || interimTranscript.startsWith('Listening'))}
           className="p-3 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-30 text-dark-950 rounded-xl transition-all font-semibold flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.3)] disabled:shadow-none"
+          title="Send goal to agent"
         >
           <Send className="w-4 h-4" />
         </button>

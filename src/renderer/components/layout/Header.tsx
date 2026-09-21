@@ -7,9 +7,19 @@ interface HeaderProps {
   config: AppConfig;
   agentState: AgentState;
   isRecording: boolean;
+  onToggleRecording?: () => void;
+  onToggleVision?: () => void;
+  onOpenSettings?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ config, agentState, isRecording }) => {
+export const Header: React.FC<HeaderProps> = ({
+  config,
+  agentState,
+  isRecording,
+  onToggleRecording,
+  onToggleVision,
+  onOpenSettings,
+}) => {
   const agentName = config.identity.agentName || 'Agent';
 
   const getStateBadge = () => {
@@ -75,55 +85,59 @@ export const Header: React.FC<HeaderProps> = ({ config, agentState, isRecording 
         {getStateBadge()}
       </div>
 
-      {/* Right side: High-contrast badges with pr-44 margin avoiding Windows caption buttons */}
+      {/* Right side: Interactive badges with pr-44 margin avoiding Windows caption buttons */}
       <div className="flex items-center gap-2.5 text-xs font-mono [-webkit-app-region:no-drag]">
-        {/* Mic Active Pill */}
-        <div
-          className={`flex items-center gap-1.5 px-3 py-1 rounded-full border transition-all ${
+        {/* Mic Active Button */}
+        <button
+          onClick={onToggleRecording}
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-full border transition-all cursor-pointer ${
             isRecording
-              ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.3)] animate-pulse font-semibold'
-              : 'bg-dark-850 text-slate-400 border-slate-700'
+              ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.3)] animate-pulse font-semibold hover:bg-rose-500/30'
+              : 'bg-dark-850 hover:bg-dark-800 text-slate-400 hover:text-slate-200 border-slate-700'
           }`}
-          title={isRecording ? 'Microphone is actively capturing audio' : 'Microphone is standby'}
+          title={isRecording ? 'Click to stop listening' : 'Click to start microphone listening'}
         >
           <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-rose-400 animate-ping' : 'bg-slate-500'}`} />
           <Mic className="w-3.5 h-3.5" />
           <span>{isRecording ? 'MIC LIVE' : 'MIC IDLE'}</span>
-        </div>
+        </button>
 
-        {/* Screen Awareness Pill */}
-        <div
-          className={`flex items-center gap-1.5 px-3 py-1 rounded-full border transition-all ${
+        {/* Screen Awareness Toggle Button */}
+        <button
+          onClick={onToggleVision}
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-full border transition-all cursor-pointer ${
             config.security.screenAwarenessConsent
-              ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.15)] font-semibold'
-              : 'bg-dark-850 text-slate-400 border-slate-700'
+              ? 'bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.15)] font-semibold'
+              : 'bg-dark-850 hover:bg-dark-800 text-slate-400 hover:text-slate-200 border-slate-700'
           }`}
-          title="Screen understanding & vision status"
+          title="Click to toggle screen understanding & vision mode"
         >
           <Eye className="w-3.5 h-3.5 text-cyan-400" />
           <span>{config.security.screenAwarenessConsent ? 'VISION ON' : 'VISION OFF'}</span>
-        </div>
+        </button>
 
-        {/* AI Provider Mode Pill - Bright, High Contrast, Crystal Clear */}
-        {config.ai.provider === 'gemini' && config.ai.geminiApiKey ? (
-          <div
-            className="flex items-center gap-1.5 px-3 py-1 rounded-full border bg-violet-500/15 text-violet-200 border-violet-500/40 font-semibold shadow-[0_0_12px_rgba(139,92,246,0.2)]"
-            title="Connected to Google Gemini Live & Flash Cloud API"
-          >
-            <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
+        {/* AI Provider Mode Pill - Clickable to open Settings */}
+        <button
+          onClick={onOpenSettings}
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-full border cursor-pointer transition-all ${
+            config.ai.provider === 'gemini' && config.ai.geminiApiKey
+              ? 'bg-violet-500/15 hover:bg-violet-500/25 text-violet-200 border-violet-500/40 font-semibold shadow-[0_0_12px_rgba(139,92,246,0.2)]'
+              : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 border-emerald-500/40 font-semibold shadow-[0_0_12px_rgba(16,185,129,0.25)]'
+          }`}
+          title="Click to configure AI Model & Gemini API key in Settings"
+        >
+          <span
+            className={`w-2 h-2 rounded-full animate-pulse ${
+              config.ai.provider === 'gemini' && config.ai.geminiApiKey ? 'bg-violet-400' : 'bg-emerald-400'
+            }`}
+          />
+          {config.ai.provider === 'gemini' && config.ai.geminiApiKey ? (
             <Cloud className="w-3.5 h-3.5 text-violet-400" />
-            <span>GEMINI CLOUD</span>
-          </div>
-        ) : (
-          <div
-            className="flex items-center gap-1.5 px-3 py-1 rounded-full border bg-emerald-500/15 text-emerald-200 border-emerald-500/40 font-semibold shadow-[0_0_12px_rgba(16,185,129,0.25)]"
-            title="Running in Local / Offline Mode (Deterministic Mock & Local Tools)"
-          >
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          ) : (
             <Cpu className="w-3.5 h-3.5 text-emerald-400" />
-            <span>LOCAL MODE</span>
-          </div>
-        )}
+          )}
+          <span>{config.ai.provider === 'gemini' && config.ai.geminiApiKey ? 'GEMINI CLOUD' : 'LOCAL MODE'}</span>
+        </button>
       </div>
     </header>
   );

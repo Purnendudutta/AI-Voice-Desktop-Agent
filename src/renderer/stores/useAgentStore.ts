@@ -32,7 +32,12 @@ export function useAgentStore() {
 
   const sendPrompt = useCallback(async (text: string) => {
     if (!window.electronAPI) return;
-    return window.electronAPI.sendPrompt(text);
+    setState('thinking');
+    const plan = await window.electronAPI.sendPrompt(text);
+    if (plan) {
+      setActivePlan(plan);
+    }
+    return plan;
   }, []);
 
   const cancelTask = useCallback(async () => {

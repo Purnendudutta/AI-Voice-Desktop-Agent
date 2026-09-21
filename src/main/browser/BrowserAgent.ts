@@ -31,6 +31,15 @@ export class BrowserAgent {
       snippet = `Accessed ${url} in browser session.`;
     }
 
+    try {
+      if (!process.env.VITEST && (url.startsWith('http://') || url.startsWith('https://'))) {
+        const electron = await import('electron');
+        if (electron?.shell?.openExternal) {
+          electron.shell.openExternal(url).catch(() => {});
+        }
+      }
+    } catch {}
+
     return {
       url,
       title: this.pageTitle,

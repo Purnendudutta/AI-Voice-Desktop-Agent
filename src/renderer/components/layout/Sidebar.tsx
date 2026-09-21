@@ -72,13 +72,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
         })}
       </div>
 
-      <div className="p-3 rounded-lg bg-dark-850/80 border border-slate-800/60 text-[11px] text-slate-400 font-mono">
+      <button
+        onClick={() => onTabChange('system')}
+        className="p-3 rounded-lg bg-dark-850/80 hover:bg-dark-800 border border-slate-800/60 hover:border-cyan-500/40 text-[11px] text-slate-400 font-mono text-left transition-all cursor-pointer group"
+      >
         <div className="flex items-center justify-between text-slate-500 mb-1">
-          <span>STATUS</span>
-          <span className="text-emerald-400">ONLINE</span>
+          <span className="group-hover:text-cyan-400 transition-colors">SYSTEM STATUS</span>
+          <span className="text-emerald-400 font-semibold">ONLINE</span>
         </div>
-        <div className="truncate">Node v24 • Playwright</div>
-      </div>
+        <div className="truncate text-slate-400 group-hover:text-slate-200">Diagnostics & Metrics →</div>
+      </button>
     </aside>
   );
 };

@@ -30,6 +30,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const agentName = config.identity.agentName || 'Agent';
   const [metrics, setMetrics] = useState<any>(null);
+  const [executingAction, setExecutingAction] = useState<string | null>(null);
 
   useEffect(() => {
     if (window.electronAPI) {
@@ -41,10 +42,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     }
   }, []);
 
+  const handleActionClick = async (prompt: string, title: string) => {
+    setExecutingAction(title);
+    try {
+      await onSendPrompt(prompt);
+    } finally {
+      setExecutingAction(null);
+    }
+  };
+
   const quickActions = [
     {
+      title: 'Open Terminal',
+      desc: 'Launch PowerShell command prompt in current workspace',
+      prompt: 'open terminal',
+      icon: Terminal,
+      color: 'text-cyan-400',
+    },
+    {
+      title: 'Launch Notepad',
+      desc: 'Open Windows Notepad for quick notes or editing',
+      prompt: 'open notepad',
+      icon: Laptop,
+      color: 'text-amber-400',
+    },
+    {
       title: 'Prepare Development Workspace',
-      desc: 'Launch VS Code, start dev servers, check Git status',
+      desc: 'Launch VS Code, check Git status, verify background services',
       prompt: 'Prepare my development workspace',
       icon: Terminal,
       color: 'text-cyan-400',
@@ -64,11 +88,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       color: 'text-emerald-400',
     },
     {
-      title: 'Screen Analysis & Assistance',
-      desc: 'Inspect screen context for errors and active dialogs',
-      prompt: 'Look at my screen and tell me what is on it',
-      icon: Laptop,
-      color: 'text-amber-400',
+      title: 'System Health Diagnostics',
+      desc: 'Retrieve CPU, RAM, uptime, and desktop session metrics',
+      prompt: 'get system status',
+      icon: RotateCw,
+      color: 'text-emerald-400',
     },
   ];
 
@@ -216,15 +240,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             return (
               <button
                 key={idx}
-                onClick={() => onSendPrompt(action.prompt)}
-                className="p-4 rounded-xl bg-dark-900 hover:bg-dark-850 border border-slate-800 hover:border-slate-700 transition-all text-left flex items-start gap-3.5 group shadow-sm hover:shadow-md"
+                onClick={() => handleActionClick(action.prompt, action.title)}
+                disabled={!!executingAction}
+                className="p-4 rounded-xl bg-dark-900 hover:bg-dark-850 disabled:opacity-60 border border-slate-800 hover:border-slate-700 transition-all text-left flex items-start gap-3.5 group shadow-sm hover:shadow-md cursor-pointer"
               >
                 <div className={`p-2.5 rounded-lg bg-dark-950 border border-slate-800 group-hover:border-slate-700 ${action.color}`}>
-                  <Icon className="w-5 h-5" />
+                  {executingAction === action.title ? (
+                    <RotateCw className="w-5 h-5 animate-spin text-cyan-400" />
+                  ) : (
+                    <Icon className="w-5 h-5" />
+                  )}
                 </div>
                 <div>
-                  <h4 className="text-sm font-semibold text-slate-200 group-hover:text-cyan-400 transition-colors">
-                    {action.title}
+                  <h4 className="text-sm font-semibold text-slate-200 group-hover:text-cyan-400 transition-colors flex items-center gap-2">
+                    <span>{action.title}</span>
+                    {executingAction === action.title && (
+                      <span className="text-[10px] font-mono text-cyan-400 font-normal">Starting...</span>
+                    )}
                   </h4>
                   <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
                     {action.desc}

@@ -111,6 +111,16 @@ export const App: React.FC = () => {
         config={config}
         agentState={isListening && state === 'idle' ? 'listening' : state}
         isRecording={isListening}
+        onToggleRecording={toggleListening}
+        onToggleVision={() => {
+          updateConfig({
+            security: {
+              ...config.security,
+              screenAwarenessConsent: !config.security.screenAwarenessConsent,
+            },
+          });
+        }}
+        onOpenSettings={() => setActiveTab('settings')}
       />
 
       {/* Main Body */}

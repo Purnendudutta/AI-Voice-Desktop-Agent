@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppConfig } from '../../../shared/types/config';
 import { Settings, Bot, Key, Shield, Sparkles, Check, Globe, Volume2, Eye } from 'lucide-react';
 
@@ -12,6 +12,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ config, onUpdateConf
   const [ai, setAi] = useState(config.ai);
   const [security, setSecurity] = useState(config.security);
   const [savedMessage, setSavedMessage] = useState(false);
+
+  useEffect(() => {
+    setIdentity(config.identity);
+    setAi(config.ai);
+    setSecurity(config.security);
+  }, [config]);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
