@@ -9,6 +9,81 @@ export interface AudioStreamOptions {
   onWakeWordDetected?: () => void;
 }
 
+/**
+ * Encodes Float32 mono PCM samples to a standard 16-bit PCM RIFF WAV ArrayBuffer
+ */
+function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+
+  function writeString(offset: number, str: string) {
+    for (let i = 0; i < str.length; i++) {
+      view.setUint8(offset + i, str.charCodeAt(i));
+    }
+  }
+
+  /* RIFF identifier */
+  writeString(0, 'RIFF');
+  /* file length */
+  view.setUint32(4, 36 + samples.length * 2, true);
+  /* RIFF type */
+  writeString(8, 'WAVE');
+  /* format chunk identifier */
+  writeString(12, 'fmt ');
+  /* format chunk length */
+  view.setUint32(16, 16, true);
+  /* sample format (1 = raw PCM) */
+  view.setUint16(20, 1, true);
+  /* channel count (1 = mono) */
+  view.setUint16(22, 1, true);
+  /* sample rate */
+  view.setUint32(24, sampleRate, true);
+  /* byte rate (sample rate * block align) */
+  view.setUint32(28, sampleRate * 2, true);
+  /* block align (channel count * bytes per sample) */
+  view.setUint16(32, 2, true);
+  /* bits per sample */
+  view.setUint16(34, 16, true);
+  /* data chunk identifier */
+  writeString(36, 'data');
+  /* data chunk length */
+  view.setUint32(40, samples.length * 2, true);
+
+  // Write 16-bit PCM samples
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++, offset += 2) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+
+  return buffer;
+}
+
+/**
+ * Downsamples Float32Array to 16,000 Hz for optimal speech recognition
+ */
+function downsampleBuffer(buffer: Float32Array, inputRate: number, outputRate = 16000): Float32Array {
+  if (outputRate >= inputRate) return buffer;
+  const ratio = inputRate / outputRate;
+  const newLen = Math.round(buffer.length / ratio);
+  const result = new Float32Array(newLen);
+  let offsetResult = 0;
+  let offsetBuffer = 0;
+  while (offsetResult < result.length) {
+    const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
+    let accum = 0;
+    let count = 0;
+    for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+      accum += buffer[i];
+      count++;
+    }
+    result[offsetResult] = accum / (count || 1);
+    offsetResult++;
+    offsetBuffer = nextOffsetBuffer;
+  }
+  return result;
+}
+
 export function useAudioStream(options: AudioStreamOptions = {}) {
   const [isListening, setIsListening] = useState(false);
   const [audioLevels, setAudioLevels] = useState<number[]>([10, 15, 10, 12, 18, 14, 10, 16, 12, 10]);
@@ -19,9 +94,13 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const recordedChunksRef = useRef<Blob[]>([]);
+  const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const silentGainRef = useRef<GainNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+
+  // PCM collection for speech recognition
+  const pcmChunksRef = useRef<Float32Array[]>([]);
+  const preSpeechBufferRef = useRef<Float32Array[]>([]);
 
   // VAD tracking
   const isSpeakingUserRef = useRef(false);
@@ -54,7 +133,7 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
     }
 
     isTranscribingRef.current = true;
-    setInterimText('Transcribing voice...');
+    setInterimText('Processing speech...');
 
     try {
       // Convert Blob to base64
@@ -67,20 +146,16 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
       }
       const base64Audio = btoa(binary);
 
-      const mimeType = audioBlob.type || 'audio/webm';
+      const mimeType = audioBlob.type || 'audio/wav';
       const result = await window.electronAPI.transcribeAudio(base64Audio, mimeType);
-
-      if (result && typeof result === 'object' && result.error === 'NO_API_KEY') {
-        setMicError(result.message || 'No Gemini API key configured in Settings.');
-        setInterimText('Gemini API key needed in Settings for voice transcription');
-        setTimeout(() => setInterimText(''), 4000);
-        return;
-      }
 
       const text = typeof result === 'string' ? result : result?.text || '';
 
       if (text && text.trim()) {
         const cleanFinal = text.trim();
+        setInterimText(`Heard: "${cleanFinal}"`);
+        setTimeout(() => setInterimText(''), 2000);
+
         const wake = optionsRef.current.wakePhrase?.toLowerCase() || '';
         const agent = optionsRef.current.agentName?.toLowerCase() || 'atlas';
 
@@ -108,14 +183,42 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
         if (command && optionsRef.current.onCommand) {
           optionsRef.current.onCommand(command);
         }
+      } else if (result && typeof result === 'object' && result.error === 'NO_API_KEY') {
+        setInterimText('Local mode: speak clearly or configure Gemini in Settings');
+        setTimeout(() => setInterimText(''), 3000);
       }
     } catch (err) {
       console.warn('Voice segment transcription notice:', err);
     } finally {
       isTranscribingRef.current = false;
-      setInterimText('');
     }
   }, []);
+
+  // Commit accumulated PCM audio to WAV blob and transcribe
+  const commitVoiceSegment = useCallback(() => {
+    const chunks = pcmChunksRef.current;
+    const totalSamples = chunks.reduce((acc, c) => acc + c.length, 0);
+    if (totalSamples < 4000) {
+      // Too short / tap noise (< ~100ms)
+      pcmChunksRef.current = [];
+      return;
+    }
+
+    const merged = new Float32Array(totalSamples);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    }
+    pcmChunksRef.current = [];
+
+    const inputRate = audioContextRef.current?.sampleRate || 44100;
+    const downsampled = downsampleBuffer(merged, inputRate, 16000);
+    const wavBuffer = encodeWav(downsampled, 16000);
+    const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+
+    processVoiceSegment(wavBlob);
+  }, [processVoiceSegment]);
 
   // Animate audio waveform bars from real mic data & perform VAD
   const updateWaveform = useCallback(() => {
@@ -143,7 +246,7 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
     setAudioLevels(levels);
 
     // Voice Activity Detection (VAD)
-    const SPEECH_ENERGY_THRESHOLD = 25;
+    const SPEECH_ENERGY_THRESHOLD = 22;
     const SILENCE_FRAMES_LIMIT = 45; // ~1.2 seconds of silence at 60fps
 
     if (totalEnergy > SPEECH_ENERGY_THRESHOLD) {
@@ -159,10 +262,7 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
           // User finished their voice sentence
           isSpeakingUserRef.current = false;
           silenceCounterRef.current = 0;
-
-          if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-            mediaRecorderRef.current.stop();
-          }
+          commitVoiceSegment();
         }
       }
     }
@@ -180,48 +280,7 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
     }
 
     animationFrameRef.current = requestAnimationFrame(updateWaveform);
-  }, [processVoiceSegment]);
-
-  // Setup / restart MediaRecorder for continuous recording segments
-  const setupMediaRecorder = useCallback((stream: MediaStream) => {
-    try {
-      let mimeType = 'audio/webm;codecs=opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
-      }
-
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-      recordedChunksRef.current = [];
-
-      recorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          recordedChunksRef.current.push(event.data);
-        }
-      };
-
-      recorder.onstop = () => {
-        const audioBlob = new Blob(recordedChunksRef.current, {
-          type: recorder.mimeType || 'audio/webm',
-        });
-        recordedChunksRef.current = [];
-        processVoiceSegment(audioBlob);
-
-        // If user is still listening, restart recorder for next utterance
-        if (isListeningRef.current && mediaStreamRef.current?.active) {
-          try {
-            recorder.start(250);
-          } catch {
-            // Already started or restarting
-          }
-        }
-      };
-
-      recorder.start(250);
-    } catch (recErr) {
-      console.warn('MediaRecorder setup notice:', recErr);
-    }
-  }, [processVoiceSegment]);
+  }, [commitVoiceSegment]);
 
   const startListening = useCallback(async () => {
     setMicError(null);
@@ -237,6 +296,8 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
 
       mediaStreamRef.current = stream;
       isListeningRef.current = true;
+      pcmChunksRef.current = [];
+      preSpeechBufferRef.current = [];
 
       // 2. Set up Web Audio Analyser
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -249,8 +310,36 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
       source.connect(analyser);
       analyserRef.current = analyser;
 
-      // 3. Initialize MediaRecorder with VAD
-      setupMediaRecorder(stream);
+      // 3. Set up ScriptProcessorNode for clean PCM capture
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      const silentGain = audioCtx.createGain();
+      silentGain.gain.value = 0;
+
+      processor.onaudioprocess = (e) => {
+        if (!isListeningRef.current) return;
+        const channelData = e.inputBuffer.getChannelData(0);
+        const copy = new Float32Array(channelData);
+
+        if (isSpeakingUserRef.current) {
+          if (pcmChunksRef.current.length === 0 && preSpeechBufferRef.current.length > 0) {
+            pcmChunksRef.current.push(...preSpeechBufferRef.current);
+            preSpeechBufferRef.current = [];
+          }
+          pcmChunksRef.current.push(copy);
+        } else {
+          preSpeechBufferRef.current.push(copy);
+          if (preSpeechBufferRef.current.length > 4) {
+            preSpeechBufferRef.current.shift();
+          }
+        }
+      };
+
+      source.connect(processor);
+      processor.connect(silentGain);
+      silentGain.connect(audioCtx.destination);
+
+      scriptProcessorRef.current = processor;
+      silentGainRef.current = silentGain;
 
       // Start animation loop
       animationFrameRef.current = requestAnimationFrame(updateWaveform);
@@ -273,7 +362,7 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
       setIsListening(false);
       isListeningRef.current = false;
     }
-  }, [updateWaveform, setupMediaRecorder]);
+  }, [updateWaveform]);
 
   const stopListening = useCallback(async () => {
     isListeningRef.current = false;
@@ -285,16 +374,22 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
       animationFrameRef.current = null;
     }
 
-    if (mediaRecorderRef.current) {
+    if (scriptProcessorRef.current) {
       try {
-        if (mediaRecorderRef.current.state === 'recording') {
-          mediaRecorderRef.current.stop();
-        }
-      } catch {
-        // ignore
-      }
-      mediaRecorderRef.current = null;
+        scriptProcessorRef.current.disconnect();
+      } catch {}
+      scriptProcessorRef.current = null;
     }
+
+    if (silentGainRef.current) {
+      try {
+        silentGainRef.current.disconnect();
+      } catch {}
+      silentGainRef.current = null;
+    }
+
+    pcmChunksRef.current = [];
+    preSpeechBufferRef.current = [];
 
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());

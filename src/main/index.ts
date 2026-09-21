@@ -27,6 +27,7 @@ import { RecoveryEngine } from './agent/RecoveryEngine';
 import { Agent } from './agent/Agent';
 import { AudioPipeline } from './audio/AudioPipeline';
 import { VoiceService } from './audio/VoiceService';
+import { WindowsSpeechService } from './audio/WindowsSpeechService';
 import { WorkspaceManager } from './scheduler/WorkspaceManager';
 import { SchedulerService } from './scheduler/SchedulerService';
 import { WorkflowRecorder } from './scheduler/WorkflowRecorder';
@@ -176,22 +177,39 @@ async function createWindow() {
 
   ipcMain.handle(IPC_CHANNELS.AUDIO_TRANSCRIBE, async (_event, base64Audio: string, mimeType?: string) => {
     const currentConfig = db.getConfig();
+
+    // 1. If Gemini API key is configured, try Gemini cloud transcription first
+    if (currentConfig.ai.geminiApiKey) {
+      try {
+        const gemini = modelRouter.getGeminiProvider();
+        const text = await gemini.transcribeAudio(base64Audio, mimeType || 'audio/wav');
+        if (text && text.trim()) {
+          return { text: text.trim(), error: null };
+        }
+      } catch (err: any) {
+        console.warn('Gemini cloud transcription notice, checking local engine:', err.message);
+      }
+    }
+
+    // 2. Offline fallback: Windows native System.Speech recognition
+    try {
+      const localText = await WindowsSpeechService.transcribeWav(base64Audio);
+      if (localText && localText.trim()) {
+        return { text: localText.trim(), error: null };
+      }
+    } catch (err: any) {
+      console.warn('Windows local speech transcription error:', err);
+    }
+
     if (!currentConfig.ai.geminiApiKey) {
       return {
         text: '',
         error: 'NO_API_KEY',
-        message: 'Voice recorded! To enable AI speech transcription, add your Gemini API key in Settings, or type your goal below.',
+        message: 'Voice recorded! For full conversational AI, configure your Gemini API key in Settings, or type your goal below.',
       };
     }
 
-    try {
-      const gemini = modelRouter.getGeminiProvider();
-      const text = await gemini.transcribeAudio(base64Audio, mimeType || 'audio/webm');
-      return { text, error: null };
-    } catch (err: any) {
-      console.warn('Audio transcription notice:', err.message);
-      return { text: '', error: 'TRANSCRIBE_FAILED', message: err.message };
-    }
+    return { text: '', error: 'NO_SPEECH', message: 'No clear speech detected.' };
   });
 
   ipcMain.handle(IPC_CHANNELS.AUDIO_BARGE_IN, async () => {
