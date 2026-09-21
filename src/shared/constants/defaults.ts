@@ -2,12 +2,12 @@ import { AppConfig } from '../types/config';
 
 export const DEFAULT_CONFIG: AppConfig = {
   identity: {
-    agentName: '', // Unset until personalized in onboarding
-    wakePhrase: '',
+    agentName: 'Atlas',
+    wakePhrase: 'Hey Atlas',
     voice: 'Aoede', // Default Gemini Voice option
     language: 'en-US',
     nickname: '',
-    userName: '',
+    userName: 'User',
     personalityMode: 'efficient',
     voiceResponseEnabled: true,
     startOnBoot: false,
@@ -29,7 +29,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     cloudRoutingMode: 'auto',
     temperature: 0.2,
   },
-  isOnboarded: false,
+  isOnboarded: true,
   updatedAt: Date.now(),
 };
 
