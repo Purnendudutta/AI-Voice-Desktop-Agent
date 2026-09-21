@@ -63,5 +63,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    watch: {
+      ignored: ['**/data/**', '**/*.sqlite', '**/*.sqlite*', '**/dist/**', '**/dist-electron/**'],
+    },
   },
 });
