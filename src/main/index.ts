@@ -1,5 +1,16 @@
 import electron, { type BrowserWindow } from 'electron';
 const { app, BrowserWindow: BrowserWindowClass, ipcMain } = electron;
+
+// Disable shader disk caching on Windows to prevent GPUCache Access Denied errors
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+
+// Single-instance lock: Prevent concurrent instances from colliding on disk cache
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+  process.exit(0);
+}
+
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -325,6 +336,13 @@ async function createWindow() {
     mainWindow.loadFile(targetHtml);
   }
 }
+
+app.on('second-instance', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
 
 app.whenReady().then(createWindow);
 
