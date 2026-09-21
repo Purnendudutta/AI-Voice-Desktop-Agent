@@ -193,4 +193,13 @@ export class AppDatabase {
     stmt.free();
     this.persist();
   }
+
+  public deletePlugin(id: string): boolean {
+    if (!this.db) return false;
+    const stmt = this.db.prepare('DELETE FROM plugins WHERE id = :id');
+    stmt.run({ ':id': id });
+    stmt.free();
+    this.persist();
+    return true;
+  }
 }

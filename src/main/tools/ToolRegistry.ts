@@ -22,6 +22,11 @@ export interface ExecutableTool extends ToolDefinition {
 
 export class ToolRegistry {
   private tools = new Map<string, ExecutableTool>();
+  private pluginManager?: any;
+
+  public setPluginManager(manager: any): void {
+    this.pluginManager = manager;
+  }
 
   constructor(
     windowManager: WindowManager,
@@ -581,17 +586,19 @@ export class ToolRegistry {
   }
 
   public getAllTools(): ToolDefinition[] {
-    return Array.from(this.tools.values()).map((t) => ({
-      id: t.id,
-      name: t.name,
-      description: t.description,
-      category: t.category,
-      parameters: t.parameters,
-      returns: t.returns,
-      riskLevel: t.riskLevel,
-      timeoutMs: t.timeoutMs,
-      requiresPermissions: t.requiresPermissions,
-    }));
+    return Array.from(this.tools.values())
+      .filter((t) => !this.pluginManager || this.pluginManager.isToolEnabled(t.id))
+      .map((t) => ({
+        id: t.id,
+        name: t.name,
+        description: t.description,
+        category: t.category,
+        parameters: t.parameters,
+        returns: t.returns,
+        riskLevel: t.riskLevel,
+        timeoutMs: t.timeoutMs,
+        requiresPermissions: t.requiresPermissions,
+      }));
   }
 
   public async executeTool(
@@ -599,6 +606,19 @@ export class ToolRegistry {
     args: Record<string, any>,
     context?: any
   ): Promise<ToolExecutionResult> {
+    if (this.pluginManager && !this.pluginManager.isToolEnabled(id)) {
+      return {
+        toolId: id,
+        success: false,
+        error: `Tool "${id}" cannot be executed because its parent plugin is currently disabled in the Plugins dashboard.`,
+        executionTimeMs: 0,
+        verification: {
+          verified: false,
+          message: `Tool "${id}" is disabled by plugin policy.`,
+        },
+      };
+    }
+
     const tool = this.tools.get(id);
     if (!tool) {
       return {

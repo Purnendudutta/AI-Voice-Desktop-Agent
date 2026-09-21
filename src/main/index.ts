@@ -144,6 +144,7 @@ async function createWindow() {
   const workflowRecorder = new WorkflowRecorder();
   const proactiveAssistant = new ProactiveAssistant();
   const pluginManager = new PluginManager(db);
+  toolRegistry.setPluginManager(pluginManager);
   const benchmarkRunner = new BenchmarkRunner(agent, config);
 
   // Setup callbacks to renderer
@@ -322,6 +323,14 @@ async function createWindow() {
 
   ipcMain.handle(IPC_CHANNELS.PLUGINS_TOGGLE, async (_event, id, enabled) => {
     return pluginManager.togglePlugin(id, enabled);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.PLUGINS_ADD, async (_event, manifest) => {
+    return pluginManager.addPlugin(manifest);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.PLUGINS_DELETE, async (_event, id) => {
+    return pluginManager.deletePlugin(id);
   });
 
   ipcMain.handle(IPC_CHANNELS.SYSTEM_METRICS_GET, async () => {

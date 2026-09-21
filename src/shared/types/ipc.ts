@@ -44,6 +44,8 @@ export const IPC_CHANNELS = {
   // Plugins & System
   PLUGINS_LIST: 'plugins:list',
   PLUGINS_TOGGLE: 'plugins:toggle',
+  PLUGINS_ADD: 'plugins:add',
+  PLUGINS_DELETE: 'plugins:delete',
   SYSTEM_METRICS_GET: 'system:metrics-get',
   BENCHMARK_RUN: 'benchmark:run',
 } as const;
@@ -91,6 +93,8 @@ export interface ElectronAPI {
   // Plugins & System
   getPlugins: () => Promise<PluginManifest[]>;
   togglePlugin: (id: string, enabled: boolean) => Promise<boolean>;
+  addPlugin: (manifest: PluginManifest) => Promise<PluginManifest>;
+  deletePlugin: (id: string) => Promise<boolean>;
   getSystemMetrics: () => Promise<DesktopContext['systemMetrics']>;
   runBenchmarks: () => Promise<Record<string, unknown>>;
 }

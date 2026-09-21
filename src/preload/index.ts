@@ -53,6 +53,8 @@ const api: ElectronAPI = {
 
   getPlugins: () => ipcRenderer.invoke(IPC_CHANNELS.PLUGINS_LIST),
   togglePlugin: (id, enabled) => ipcRenderer.invoke(IPC_CHANNELS.PLUGINS_TOGGLE, id, enabled),
+  addPlugin: (manifest) => ipcRenderer.invoke(IPC_CHANNELS.PLUGINS_ADD, manifest),
+  deletePlugin: (id) => ipcRenderer.invoke(IPC_CHANNELS.PLUGINS_DELETE, id),
 
   getSystemMetrics: () => ipcRenderer.invoke(IPC_CHANNELS.SYSTEM_METRICS_GET),
   runBenchmarks: () => ipcRenderer.invoke(IPC_CHANNELS.BENCHMARK_RUN),

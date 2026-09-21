@@ -71,6 +71,26 @@ export class PluginManager {
     return Array.from(this.plugins.values());
   }
 
+  public isToolEnabled(toolId: string): boolean {
+    for (const plugin of this.plugins.values()) {
+      if (plugin.toolsProvided.includes(toolId)) {
+        return plugin.enabled;
+      }
+    }
+    return true; // Unaffiliated tools default to active
+  }
+
+  public addPlugin(manifest: PluginManifest): PluginManifest {
+    this.plugins.set(manifest.id, manifest);
+    this.db.savePlugin(manifest);
+    return manifest;
+  }
+
+  public deletePlugin(id: string): boolean {
+    this.plugins.delete(id);
+    return this.db.deletePlugin(id);
+  }
+
   public togglePlugin(id: string, enabled: boolean): boolean {
     const plugin = this.plugins.get(id);
     if (!plugin) return false;
