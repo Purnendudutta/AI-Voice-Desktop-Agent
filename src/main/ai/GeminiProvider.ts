@@ -10,8 +10,8 @@ export class GeminiProvider implements AIProvider {
   private client: GoogleGenAI | null = null;
   private planningModel: string;
 
-  constructor(apiKey?: string, planningModel = 'gemini-3.8-flash') {
-    this.planningModel = planningModel;
+  constructor(apiKey?: string, planningModel = 'gemini-2.5-flash') {
+    this.planningModel = planningModel === 'gemini-3.8-flash' ? 'gemini-2.5-flash' : planningModel;
     const key = apiKey || process.env.GEMINI_API_KEY;
     if (key) {
       this.client = new GoogleGenAI({ apiKey: key });

@@ -54,14 +54,20 @@ export const VoiceBar: React.FC<VoiceBarProps> = ({
   return (
     <div className="border-t border-slate-800/80 bg-dark-900/95 backdrop-blur-md px-6 py-3 space-y-2">
       {/* Real-time Voice Transcription Banner */}
-      {interimTranscript && (
-        <div className="max-w-4xl mx-auto px-3.5 py-1.5 rounded-lg bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 text-xs flex items-center justify-between font-mono animate-in fade-in">
+      {interimTranscript && (!interimTranscript.startsWith('Listening') || isRecording) && (
+        <div
+          className={`max-w-4xl mx-auto px-3.5 py-1.5 rounded-lg border text-xs flex items-center justify-between font-mono animate-in fade-in ${
+            interimTranscript.startsWith('Speech not recognized')
+              ? 'bg-amber-950/80 border-amber-500/40 text-amber-300'
+              : 'bg-cyan-950/80 border-cyan-500/40 text-cyan-300'
+          }`}
+        >
           <div className="flex items-center gap-2">
             <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
             <span>{interimTranscript}</span>
           </div>
-          {interimTranscript.startsWith('Heard:') && (
-            <span className="text-[10px] text-cyan-400/80">Press ENTER or click Send</span>
+          {interimTranscript.startsWith('Executing:') && (
+            <span className="text-[10px] text-emerald-400 font-medium">Auto-executing...</span>
           )}
         </div>
       )}

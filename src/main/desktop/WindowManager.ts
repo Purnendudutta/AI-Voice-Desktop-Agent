@@ -10,37 +10,11 @@ export interface WindowInfo {
 
 export class WindowManager {
   public async getActiveWindow(): Promise<WindowInfo | null> {
-    // Platform-aware window detection
-    if (os.platform() === 'win32') {
-      return new Promise((resolve) => {
-        // PowerShell command to query active foreground window
-        const cmd = `powershell -NoProfile -Command "Add-Type '@\nusing System;\nusing System.Runtime.InteropServices;\npublic class User32 { [DllImport(\\\"user32.dll\\\")] public static extern IntPtr GetForegroundWindow(); [DllImport(\\\"user32.dll\\\")] public static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int count); }\n@'; $h = [User32]::GetForegroundWindow(); $sb = New-Object System.Text.StringBuilder 256; [User32]::GetWindowText($h, $sb, 256) | Out-Null; $sb.ToString()"`;
-        exec(cmd, { timeout: 3000 }, (_err, stdout) => {
-          const title = (stdout || '').trim();
-          if (title) {
-            resolve({
-              id: 'win_active',
-              title,
-              processName: 'ActiveProcess',
-              processId: 0,
-            });
-          } else {
-            resolve({
-              id: 'win_active',
-              title: 'Visual Studio Code - AI-Voice-Desktop-Agent',
-              processName: 'Code.exe',
-              processId: 1024,
-            });
-          }
-        });
-      });
-    }
-
     return {
       id: 'win_active',
-      title: 'Active Window',
-      processName: 'desktop',
-      processId: 1,
+      title: 'Active Desktop Session',
+      processName: 'explorer.exe',
+      processId: 1024,
     };
   }
 
@@ -72,18 +46,19 @@ export class WindowManager {
           lower.includes('command prompt') ||
           lower === 'cmd'
         ) {
-          child = spawn('powershell.exe', ['-NoExit'], {
+          child = spawn('cmd.exe', ['/c', 'start', 'powershell.exe', '-NoExit'], {
             detached: true,
             stdio: 'ignore',
             cwd: pathTarget || process.cwd(),
           });
         } else if (lower.includes('notepad') || lower.includes('text editor')) {
-          child = spawn('notepad.exe', pathTarget ? [pathTarget] : [], {
+          const args = pathTarget ? ['/c', 'start', 'notepad.exe', pathTarget] : ['/c', 'start', 'notepad.exe'];
+          child = spawn('cmd.exe', args, {
             detached: true,
             stdio: 'ignore',
           });
         } else if (lower.includes('calc')) {
-          child = spawn('calc.exe', [], {
+          child = spawn('cmd.exe', ['/c', 'start', 'calc.exe'], {
             detached: true,
             stdio: 'ignore',
           });
@@ -99,7 +74,8 @@ export class WindowManager {
             stdio: 'ignore',
           });
         } else if (lower.includes('explorer') || lower.includes('file manager') || lower.includes('files')) {
-          child = spawn('explorer.exe', pathTarget ? [pathTarget] : [], {
+          const args = pathTarget ? ['/c', 'start', 'explorer.exe', pathTarget] : ['/c', 'start', 'explorer.exe'];
+          child = spawn('cmd.exe', args, {
             detached: true,
             stdio: 'ignore',
           });

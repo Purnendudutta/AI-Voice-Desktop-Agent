@@ -118,7 +118,13 @@ export class Agent {
 
     // 3. Task Planning
     const availableTools = this.toolRegistry.getAllTools();
-    const plan = await aiProvider.planTask(cleanGoal, availableTools, context, agentName);
+    let plan: TaskPlan;
+    try {
+      plan = await aiProvider.planTask(cleanGoal, availableTools, context, agentName);
+    } catch (err: any) {
+      console.warn(`Primary AI provider planning notice: ${err?.message || err}. Falling back to deterministic local planner.`);
+      plan = await this.router.getMockProvider().planTask(cleanGoal, availableTools, context, agentName);
+    }
 
     this.taskManager.setActivePlan(plan);
 

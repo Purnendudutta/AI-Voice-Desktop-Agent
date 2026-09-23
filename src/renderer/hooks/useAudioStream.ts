@@ -153,8 +153,8 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
 
       if (text && text.trim()) {
         const cleanFinal = text.trim();
-        setInterimText(`Heard: "${cleanFinal}"`);
-        setTimeout(() => setInterimText(''), 2000);
+        setInterimText(`Executing: "${cleanFinal}"...`);
+        setTimeout(() => setInterimText(''), 3500);
 
         const wake = optionsRef.current.wakePhrase?.toLowerCase() || '';
         const agent = optionsRef.current.agentName?.toLowerCase() || 'atlas';
@@ -180,15 +180,21 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
           command = cleanFinal.replace(new RegExp(`^${agent}[,:\\s]+`, 'i'), '').trim();
         }
 
-        if (command && optionsRef.current.onCommand) {
+        // If user spoke only "Hey Atlas" or "Atlas", treat as greeting / status query
+        if (!command || !command.trim()) {
+          command = 'who are you';
+        }
+
+        if (optionsRef.current.onCommand) {
           optionsRef.current.onCommand(command);
         }
-      } else if (result && typeof result === 'object' && result.error === 'NO_API_KEY') {
-        setInterimText('Local mode: speak clearly or configure Gemini in Settings');
+      } else {
+        setInterimText('Speech not recognized — speak clearly or type below');
         setTimeout(() => setInterimText(''), 3000);
       }
     } catch (err) {
       console.warn('Voice segment transcription notice:', err);
+      setInterimText('');
     } finally {
       isTranscribingRef.current = false;
     }
@@ -198,9 +204,10 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
   const commitVoiceSegment = useCallback(() => {
     const chunks = pcmChunksRef.current;
     const totalSamples = chunks.reduce((acc, c) => acc + c.length, 0);
-    if (totalSamples < 4000) {
-      // Too short / tap noise (< ~100ms)
+    if (totalSamples < 3000) {
+      // Too short (< ~70ms)
       pcmChunksRef.current = [];
+      setInterimText('');
       return;
     }
 
@@ -246,8 +253,8 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
     setAudioLevels(levels);
 
     // Voice Activity Detection (VAD)
-    const SPEECH_ENERGY_THRESHOLD = 22;
-    const SILENCE_FRAMES_LIMIT = 45; // ~1.2 seconds of silence at 60fps
+    const SPEECH_ENERGY_THRESHOLD = 20;
+    const SILENCE_FRAMES_LIMIT = 65; // ~1.1 seconds of natural speech pause at 60fps
 
     if (totalEnergy > SPEECH_ENERGY_THRESHOLD) {
       silenceCounterRef.current = 0;
@@ -388,8 +395,15 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
       silentGainRef.current = null;
     }
 
-    pcmChunksRef.current = [];
-    preSpeechBufferRef.current = [];
+    // If speech audio was captured before stopping, commit and transcribe it!
+    const hasAudio = pcmChunksRef.current.length > 0;
+    if (hasAudio) {
+      commitVoiceSegment();
+    } else {
+      pcmChunksRef.current = [];
+      preSpeechBufferRef.current = [];
+      setInterimText('');
+    }
 
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -403,12 +417,11 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
 
     setIsListening(false);
     setAudioLevels([10, 12, 10, 14, 12, 10, 12, 10, 12, 10]);
-    setInterimText('');
 
     if (window.electronAPI) {
       await window.electronAPI.stopAudio();
     }
-  }, []);
+  }, [commitVoiceSegment]);
 
   const toggleListening = useCallback(() => {
     if (isListening) {

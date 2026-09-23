@@ -31,13 +31,19 @@ export function useAgentStore() {
   }, []);
 
   const sendPrompt = useCallback(async (text: string) => {
-    if (!window.electronAPI) return;
+    if (!window.electronAPI) return null;
     setState('thinking');
-    const plan = await window.electronAPI.sendPrompt(text);
-    if (plan) {
-      setActivePlan(plan);
+    try {
+      const plan = await window.electronAPI.sendPrompt(text);
+      if (plan) {
+        setActivePlan(plan);
+      }
+      return plan;
+    } catch (err) {
+      console.error('Failed to execute goal:', err);
+      setState('idle');
+      return null;
     }
-    return plan;
   }, []);
 
   const cancelTask = useCallback(async () => {

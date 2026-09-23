@@ -23,9 +23,9 @@ export const DEFAULT_CONFIG: AppConfig = {
   },
   ai: {
     provider: 'gemini',
-    planningModel: 'gemini-3.8-flash',
-    liveVoiceModel: 'gemini-3.1-flash-live-preview',
-    transcribeModel: 'gemini-3.5-transcribe',
+    planningModel: 'gemini-2.5-flash',
+    liveVoiceModel: 'gemini-2.5-flash',
+    transcribeModel: 'gemini-2.5-flash',
     cloudRoutingMode: 'auto',
     temperature: 0.2,
   },

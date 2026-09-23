@@ -70,20 +70,37 @@ export class ModelRouter {
       return decision;
     }
 
-    // Direct simple local triggers
+    // Direct simple local triggers & Quick Workflows
     const stripped = lower.replace(/^(hey\s+)?(atlas|nova|agent)[,:\s]+/i, '').trim();
     if (
       stripped.startsWith('open ') ||
       stripped.startsWith('launch ') ||
       stripped.startsWith('close ') ||
+      stripped.startsWith('prepare ') ||
+      stripped.startsWith('organize ') ||
+      stripped.startsWith('run ') ||
+      stripped.startsWith('get ') ||
+      stripped.includes('workspace') ||
+      stripped.includes('downloads') ||
+      stripped.includes('tests') ||
+      stripped.includes('test') ||
+      stripped.includes('diagnostics') ||
+      stripped.includes('status') ||
+      stripped.includes('who are you') ||
+      stripped.includes('hello') ||
+      stripped.includes('hi') ||
+      stripped.includes('help') ||
       stripped === 'terminal' ||
       stripped === 'notepad' ||
       stripped === 'calculator' ||
-      stripped === 'powershell'
+      stripped === 'powershell' ||
+      stripped === 'calc' ||
+      stripped === 'browser' ||
+      stripped === 'chrome'
     ) {
       const decision: RoutingDecision = {
         route: 'local',
-        reason: 'Simple local application command',
+        reason: 'Built-in local desktop command or workflow',
         provider: this.mockProvider,
         timestamp,
       };
@@ -102,6 +119,14 @@ export class ModelRouter {
     return decision;
   }
 
+  public getMockProvider(): MockAIProvider {
+    return this.mockProvider;
+  }
+
+  public getGeminiProvider(): GeminiProvider {
+    return this.geminiProvider;
+  }
+
   private logDecision(decision: RoutingDecision): void {
     this.routingLog.unshift(decision);
     if (this.routingLog.length > 100) {
@@ -111,9 +136,5 @@ export class ModelRouter {
 
   public getRoutingHistory(limit = 20): RoutingDecision[] {
     return this.routingLog.slice(0, limit);
-  }
-
-  public getGeminiProvider(): GeminiProvider {
-    return this.geminiProvider;
   }
 }

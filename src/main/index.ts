@@ -213,15 +213,11 @@ async function createWindow() {
       console.warn('Windows local speech transcription error:', err);
     }
 
-    if (!currentConfig.ai.geminiApiKey) {
-      return {
-        text: '',
-        error: 'NO_API_KEY',
-        message: 'Voice recorded! For full conversational AI, configure your Gemini API key in Settings, or type your goal below.',
-      };
-    }
-
-    return { text: '', error: 'NO_SPEECH', message: 'No clear speech detected.' };
+    return {
+      text: '',
+      error: 'NO_SPEECH',
+      message: 'No clear speech detected. Please speak closer to the microphone or type your goal below.',
+    };
   });
 
   ipcMain.handle(IPC_CHANNELS.AUDIO_BARGE_IN, async () => {
