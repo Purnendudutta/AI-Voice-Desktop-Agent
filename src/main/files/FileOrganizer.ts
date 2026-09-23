@@ -1,4 +1,5 @@
 import path from 'node:path';
+import os from 'node:os';
 import { FileAgent, FileItem } from './FileAgent';
 
 export interface OrganizePlan {
@@ -45,7 +46,15 @@ export class FileOrganizer {
   }
 
   public async createOrganizePlan(targetDir: string): Promise<OrganizePlan> {
-    const files = await this.fileAgent.searchFiles(targetDir, '*', { maxDepth: 1, limit: 100 });
+    const lower = targetDir.toLowerCase().trim();
+    let resolvedDir = targetDir;
+    if (lower === 'downloads' || lower === './downloads') {
+      resolvedDir = path.join(os.homedir(), 'Downloads');
+    } else if (lower === 'desktop' || lower === './desktop') {
+      resolvedDir = path.join(os.homedir(), 'Desktop');
+    }
+
+    const files = await this.fileAgent.searchFiles(resolvedDir, '*', { maxDepth: 1, limit: 100 });
     const categories: Record<string, string[]> = {};
     const plannedMoves: OrganizePlan['plannedMoves'] = [];
 
@@ -54,7 +63,7 @@ export class FileOrganizer {
       if (!categories[cat]) categories[cat] = [];
       categories[cat].push(file.name);
 
-      const destPath = path.join(targetDir, cat, file.name);
+      const destPath = path.join(resolvedDir, cat, file.name);
       plannedMoves.push({
         source: file.path,
         destination: destPath,

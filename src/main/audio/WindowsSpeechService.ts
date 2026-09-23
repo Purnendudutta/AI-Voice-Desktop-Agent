@@ -56,10 +56,28 @@ try {
   $dictGrammar.Weight = 0.3
   $engine.LoadGrammar($dictGrammar)
 
+  $bestText = ""
+  $engine.add_SpeechRecognized({
+    param($s, $e)
+    if ($e.Result.Text) { $script:bestText = $e.Result.Text }
+  })
+  $engine.add_SpeechRecognitionRejected({
+    param($s, $e)
+    if (-not $script:bestText -and $e.Result.Text) { $script:bestText = $e.Result.Text }
+  })
+  $engine.add_SpeechHypothesized({
+    param($s, $e)
+    if (-not $script:bestText -and $e.Result.Text) { $script:bestText = $e.Result.Text }
+  })
+
   $engine.SetInputToWaveFile('${tempWav.replace(/'/g, "''")}')
   $res = $engine.Recognize()
   if ($res -and $res.Text) {
-    Write-Output $res.Text
+    $script:bestText = $res.Text
+  }
+
+  if ($script:bestText) {
+    Write-Output $script:bestText
   }
   $engine.Dispose()
 } catch {

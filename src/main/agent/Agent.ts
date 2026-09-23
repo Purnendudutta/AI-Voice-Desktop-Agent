@@ -88,6 +88,12 @@ export class Agent {
   public async handleUserGoal(userInput: string): Promise<TaskPlan> {
     const agentName = this.config.identity.agentName || 'Agent';
     const wakePhrase = this.config.identity.wakePhrase || `Hey ${agentName}`;
+
+    // Cleanly reset any previously running task so new command is not blocked
+    if (this.state !== 'idle') {
+      await this.cancelActiveTask();
+    }
+
     this.setState('thinking');
 
     // Strip conversational wake-prefix if present (e.g. "Atlas, open terminal" -> "open terminal")

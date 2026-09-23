@@ -32,19 +32,15 @@ export const VoiceBar: React.FC<VoiceBarProps> = ({
   const [text, setText] = useState('');
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      const promptToSend = text.trim() || (interimTranscript && !interimTranscript.startsWith('Listening') ? interimTranscript.replace(/^Heard:\s*"/, '').replace(/"$/, '').trim() : '');
-      if (promptToSend) {
-        onSendPrompt(promptToSend);
-        setText('');
-      }
+    if (e.key === 'Enter' && text.trim()) {
+      onSendPrompt(text.trim());
+      setText('');
     }
   };
 
   const handleSend = () => {
-    const promptToSend = text.trim() || (interimTranscript && !interimTranscript.startsWith('Listening') ? interimTranscript.replace(/^Heard:\s*"/, '').replace(/"$/, '').trim() : '');
-    if (promptToSend) {
-      onSendPrompt(promptToSend);
+    if (text.trim()) {
+      onSendPrompt(text.trim());
       setText('');
     }
   };
@@ -151,7 +147,7 @@ export const VoiceBar: React.FC<VoiceBarProps> = ({
         {/* Send Action */}
         <button
           onClick={handleSend}
-          disabled={!text.trim() && (!interimTranscript || interimTranscript.startsWith('Listening'))}
+          disabled={!text.trim()}
           className="p-3 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-30 text-dark-950 rounded-xl transition-all font-semibold flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.3)] disabled:shadow-none"
           title="Send goal to agent"
         >

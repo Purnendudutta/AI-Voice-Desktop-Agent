@@ -289,6 +289,19 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
         offset += chunk.length;
       }
 
+      // Audio volume normalization: amplify quiet microphone input
+      let maxAmp = 0;
+      for (let i = 0; i < merged.length; i++) {
+        const abs = Math.abs(merged[i]);
+        if (abs > maxAmp) maxAmp = abs;
+      }
+      if (maxAmp > 0.005 && maxAmp < 0.7) {
+        const gain = 0.85 / maxAmp;
+        for (let i = 0; i < merged.length; i++) {
+          merged[i] = Math.max(-1, Math.min(1, merged[i] * gain));
+        }
+      }
+
       const inputRate = sampleRateRef.current || 44100;
       const downsampled = downsampleBuffer(merged, inputRate, 16000);
       const wavBuffer = encodeWav(downsampled, 16000);

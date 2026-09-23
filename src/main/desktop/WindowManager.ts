@@ -38,7 +38,7 @@ export class WindowManager {
     return new Promise((resolve) => {
       try {
         const lower = appName.toLowerCase().trim();
-        let child;
+        let cmd = '';
 
         if (
           lower.includes('terminal') ||
@@ -46,58 +46,30 @@ export class WindowManager {
           lower.includes('command prompt') ||
           lower === 'cmd'
         ) {
-          child = spawn('cmd.exe', ['/c', 'start', 'powershell.exe', '-NoExit'], {
-            detached: true,
-            stdio: 'ignore',
-            cwd: pathTarget || process.cwd(),
-          });
+          cmd = pathTarget
+            ? `start powershell.exe -NoExit -WorkingDirectory "${pathTarget}"`
+            : `start powershell.exe -NoExit`;
         } else if (lower.includes('notepad') || lower.includes('text editor')) {
-          const args = pathTarget ? ['/c', 'start', 'notepad.exe', pathTarget] : ['/c', 'start', 'notepad.exe'];
-          child = spawn('cmd.exe', args, {
-            detached: true,
-            stdio: 'ignore',
-          });
+          cmd = pathTarget ? `start notepad.exe "${pathTarget}"` : `start notepad.exe`;
         } else if (lower.includes('calc')) {
-          child = spawn('cmd.exe', ['/c', 'start', 'calc.exe'], {
-            detached: true,
-            stdio: 'ignore',
-          });
+          cmd = `start calc.exe`;
         } else if (lower.includes('code') || lower.includes('visual studio code')) {
-          child = spawn('cmd.exe', ['/c', 'code', pathTarget || '.'], {
-            detached: true,
-            stdio: 'ignore',
-          });
+          cmd = pathTarget ? `start code "${pathTarget}"` : `start code .`;
         } else if (lower.includes('chrome') || lower.includes('browser')) {
-          const args = pathTarget ? ['/c', 'start', 'chrome', pathTarget] : ['/c', 'start', 'chrome'];
-          child = spawn('cmd.exe', args, {
-            detached: true,
-            stdio: 'ignore',
-          });
-        } else if (lower.includes('explorer') || lower.includes('file manager') || lower.includes('files')) {
-          const args = pathTarget ? ['/c', 'start', 'explorer.exe', pathTarget] : ['/c', 'start', 'explorer.exe'];
-          child = spawn('cmd.exe', args, {
-            detached: true,
-            stdio: 'ignore',
-          });
+          cmd = pathTarget ? `start chrome "${pathTarget}"` : `start chrome`;
+        } else if (lower.includes('explorer') || lower.includes('files')) {
+          cmd = pathTarget ? `start explorer.exe "${pathTarget}"` : `start explorer.exe`;
         } else {
-          // General application or command
-          child = spawn('cmd.exe', ['/c', 'start', '""', appName], {
-            detached: true,
-            stdio: 'ignore',
-          });
+          cmd = `start "" "${appName}"`;
         }
 
-        child.on('error', () => {
-          resolve(false);
+        exec(cmd, { cwd: pathTarget || process.cwd(), windowsHide: false }, () => {
+          resolve(true);
         });
 
-        // Unreference the child process so parent process does not wait on it
-        child.unref();
-
-        // Brief tick to ensure no immediate spawn error
         setTimeout(() => {
           resolve(true);
-        }, 100);
+        }, 200);
       } catch {
         resolve(false);
       }
