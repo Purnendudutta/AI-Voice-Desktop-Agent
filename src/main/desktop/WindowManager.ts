@@ -106,7 +106,7 @@ export class WindowManager {
 
   public async closeApplication(appName: string): Promise<boolean> {
     return new Promise((resolve) => {
-      const command = `taskkill /IM "${appName}.exe" /F`;
+      const command = `taskkill /IM "${appName}.exe" /F 2>nul`;
       exec(command, { timeout: 4000 }, (err) => {
         resolve(!err);
       });

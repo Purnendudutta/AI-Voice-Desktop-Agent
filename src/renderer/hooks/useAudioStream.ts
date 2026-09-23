@@ -92,21 +92,20 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   const audioContextRef = useRef<AudioContext | null>(null);
+  const sampleRateRef = useRef<number>(44100);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const silentGainRef = useRef<GainNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
-  // PCM collection for speech recognition
+  // PCM collection & VAD tracking
   const pcmChunksRef = useRef<Float32Array[]>([]);
-  const preSpeechBufferRef = useRef<Float32Array[]>([]);
-
-  // VAD tracking
-  const isSpeakingUserRef = useRef(false);
-  const silenceCounterRef = useRef(0);
-  const isTranscribingRef = useRef(false);
   const isListeningRef = useRef(false);
+  const hasSpokenRef = useRef(false);
+  const silenceBlocksRef = useRef(0);
+  const isTranscribingRef = useRef(false);
+  const listenTimerRef = useRef<any>(null);
 
   const optionsRef = useRef(options);
   optionsRef.current = options;
@@ -124,7 +123,8 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
   // Process and transcribe a completed voice segment
   const processVoiceSegment = useCallback(async (audioBlob: Blob) => {
     if (audioBlob.size < 2048) {
-      // Chunk too small / empty noise
+      setInterimText('No speech detected — speak clearly or type below');
+      setTimeout(() => setInterimText(''), 3000);
       return;
     }
 
@@ -133,18 +133,20 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
     }
 
     isTranscribingRef.current = true;
-    setInterimText('Processing speech...');
+    setInterimText('Transcribing speech...');
 
     try {
-      // Convert Blob to base64
-      const arrayBuffer = await audioBlob.arrayBuffer();
-      let binary = '';
-      const bytes = new Uint8Array(arrayBuffer);
-      const len = bytes.byteLength;
-      for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const base64Audio = btoa(binary);
+      // Fast, safe Blob -> base64 conversion via FileReader
+      const base64Audio = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const res = reader.result as string;
+          const commaIdx = res.indexOf(',');
+          resolve(commaIdx >= 0 ? res.substring(commaIdx + 1) : res);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(audioBlob);
+      });
 
       const mimeType = audioBlob.type || 'audio/wav';
       const result = await window.electronAPI.transcribeAudio(base64Audio, mimeType);
@@ -189,7 +191,7 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
           optionsRef.current.onCommand(command);
         }
       } else {
-        setInterimText('Speech not recognized — speak clearly or type below');
+        setInterimText('No speech recognized — speak clearly or type below');
         setTimeout(() => setInterimText(''), 3000);
       }
     } catch (err) {
@@ -200,34 +202,7 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
     }
   }, []);
 
-  // Commit accumulated PCM audio to WAV blob and transcribe
-  const commitVoiceSegment = useCallback(() => {
-    const chunks = pcmChunksRef.current;
-    const totalSamples = chunks.reduce((acc, c) => acc + c.length, 0);
-    if (totalSamples < 3000) {
-      // Too short (< ~70ms)
-      pcmChunksRef.current = [];
-      setInterimText('');
-      return;
-    }
-
-    const merged = new Float32Array(totalSamples);
-    let offset = 0;
-    for (const chunk of chunks) {
-      merged.set(chunk, offset);
-      offset += chunk.length;
-    }
-    pcmChunksRef.current = [];
-
-    const inputRate = audioContextRef.current?.sampleRate || 44100;
-    const downsampled = downsampleBuffer(merged, inputRate, 16000);
-    const wavBuffer = encodeWav(downsampled, 16000);
-    const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
-
-    processVoiceSegment(wavBlob);
-  }, [processVoiceSegment]);
-
-  // Animate audio waveform bars from real mic data & perform VAD
+  // Animate audio waveform bars from real mic data
   const updateWaveform = useCallback(() => {
     if (!analyserRef.current) return;
 
@@ -235,10 +210,9 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
     const dataArray = new Uint8Array(bufferLength);
     analyserRef.current.getByteFrequencyData(dataArray);
 
-    // Sample 10 frequency buckets
+    // Sample 10 frequency buckets for waveform display
     const bucketSize = Math.floor(bufferLength / 10);
     const levels: number[] = [];
-    let totalEnergy = 0;
 
     for (let i = 0; i < 10; i++) {
       let sum = 0;
@@ -247,134 +221,21 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
       }
       const avg = sum / (bucketSize || 1);
       levels.push(Math.min(100, Math.max(10, Math.round((avg / 255) * 100))));
-      totalEnergy += avg;
     }
 
     setAudioLevels(levels);
-
-    // Voice Activity Detection (VAD)
-    const SPEECH_ENERGY_THRESHOLD = 20;
-    const SILENCE_FRAMES_LIMIT = 65; // ~1.1 seconds of natural speech pause at 60fps
-
-    if (totalEnergy > SPEECH_ENERGY_THRESHOLD) {
-      silenceCounterRef.current = 0;
-      if (!isSpeakingUserRef.current && !isTranscribingRef.current) {
-        isSpeakingUserRef.current = true;
-        setInterimText('Listening...');
-      }
-    } else {
-      if (isSpeakingUserRef.current) {
-        silenceCounterRef.current += 1;
-        if (silenceCounterRef.current >= SILENCE_FRAMES_LIMIT) {
-          // User finished their voice sentence
-          isSpeakingUserRef.current = false;
-          silenceCounterRef.current = 0;
-          commitVoiceSegment();
-        }
-      }
-    }
-
-    // Stream base64 audio chunk to Electron Main AudioPipeline if active
-    if (totalEnergy > 50 && window.electronAPI?.sendAudioChunk) {
-      let binary = '';
-      const bytes = new Uint8Array(dataArray.buffer);
-      const len = bytes.byteLength;
-      for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const dummyPcm = btoa(binary);
-      window.electronAPI.sendAudioChunk(dummyPcm);
-    }
-
     animationFrameRef.current = requestAnimationFrame(updateWaveform);
-  }, [commitVoiceSegment]);
+  }, []);
 
-  const startListening = useCallback(async () => {
-    setMicError(null);
-    try {
-      // 1. Request hardware microphone stream
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-
-      mediaStreamRef.current = stream;
-      isListeningRef.current = true;
-      pcmChunksRef.current = [];
-      preSpeechBufferRef.current = [];
-
-      // 2. Set up Web Audio Analyser
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      const audioCtx = new AudioCtx();
-      audioContextRef.current = audioCtx;
-
-      const source = audioCtx.createMediaStreamSource(stream);
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 64;
-      source.connect(analyser);
-      analyserRef.current = analyser;
-
-      // 3. Set up ScriptProcessorNode for clean PCM capture
-      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-      const silentGain = audioCtx.createGain();
-      silentGain.gain.value = 0;
-
-      processor.onaudioprocess = (e) => {
-        if (!isListeningRef.current) return;
-        const channelData = e.inputBuffer.getChannelData(0);
-        const copy = new Float32Array(channelData);
-
-        if (isSpeakingUserRef.current) {
-          if (pcmChunksRef.current.length === 0 && preSpeechBufferRef.current.length > 0) {
-            pcmChunksRef.current.push(...preSpeechBufferRef.current);
-            preSpeechBufferRef.current = [];
-          }
-          pcmChunksRef.current.push(copy);
-        } else {
-          preSpeechBufferRef.current.push(copy);
-          if (preSpeechBufferRef.current.length > 4) {
-            preSpeechBufferRef.current.shift();
-          }
-        }
-      };
-
-      source.connect(processor);
-      processor.connect(silentGain);
-      silentGain.connect(audioCtx.destination);
-
-      scriptProcessorRef.current = processor;
-      silentGainRef.current = silentGain;
-
-      // Start animation loop
-      animationFrameRef.current = requestAnimationFrame(updateWaveform);
-
-      setIsListening(true);
-      if (window.electronAPI) {
-        await window.electronAPI.startAudio();
-      }
-    } catch (err: any) {
-      console.error('Microphone access error:', err);
-      let msg = 'Could not access microphone.';
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        msg = 'Microphone permission denied. Please allow microphone access in Windows / System Settings.';
-      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        msg = 'No microphone device found on your computer.';
-      } else {
-        msg = err.message || 'Microphone error.';
-      }
-      setMicError(msg);
-      setIsListening(false);
-      isListeningRef.current = false;
+  // Stop recording and immediately commit speech for transcription
+  const stopListening = useCallback(() => {
+    if (listenTimerRef.current) {
+      clearTimeout(listenTimerRef.current);
+      listenTimerRef.current = null;
     }
-  }, [updateWaveform]);
 
-  const stopListening = useCallback(async () => {
     isListeningRef.current = false;
-    isSpeakingUserRef.current = false;
-    silenceCounterRef.current = 0;
+    setIsListening(false);
 
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
@@ -395,15 +256,13 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
       silentGainRef.current = null;
     }
 
-    // If speech audio was captured before stopping, commit and transcribe it!
-    const hasAudio = pcmChunksRef.current.length > 0;
-    if (hasAudio) {
-      commitVoiceSegment();
-    } else {
-      pcmChunksRef.current = [];
-      preSpeechBufferRef.current = [];
-      setInterimText('');
-    }
+    // Collect all recorded PCM audio
+    const chunks = pcmChunksRef.current;
+    pcmChunksRef.current = [];
+    hasSpokenRef.current = false;
+    silenceBlocksRef.current = 0;
+
+    const totalSamples = chunks.reduce((acc, c) => acc + c.length, 0);
 
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -415,16 +274,138 @@ export function useAudioStream(options: AudioStreamOptions = {}) {
       audioContextRef.current = null;
     }
 
-    setIsListening(false);
     setAudioLevels([10, 12, 10, 14, 12, 10, 12, 10, 12, 10]);
 
     if (window.electronAPI) {
-      await window.electronAPI.stopAudio();
+      window.electronAPI.stopAudio().catch(() => {});
     }
-  }, [commitVoiceSegment]);
+
+    // Process audio if sufficiently sized
+    if (totalSamples >= 3000) {
+      const merged = new Float32Array(totalSamples);
+      let offset = 0;
+      for (const chunk of chunks) {
+        merged.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      const inputRate = sampleRateRef.current || 44100;
+      const downsampled = downsampleBuffer(merged, inputRate, 16000);
+      const wavBuffer = encodeWav(downsampled, 16000);
+      const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+
+      processVoiceSegment(wavBlob);
+    } else {
+      setInterimText('');
+    }
+  }, [processVoiceSegment]);
+
+  const startListening = useCallback(async () => {
+    setMicError(null);
+    try {
+      // 1. Request hardware microphone stream
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+
+      mediaStreamRef.current = stream;
+      isListeningRef.current = true;
+      hasSpokenRef.current = false;
+      silenceBlocksRef.current = 0;
+      pcmChunksRef.current = [];
+
+      // 2. Set up Web Audio Analyser
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const audioCtx = new AudioCtx();
+      audioContextRef.current = audioCtx;
+      sampleRateRef.current = audioCtx.sampleRate || 44100;
+
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      source.connect(analyser);
+      analyserRef.current = analyser;
+
+      // 3. Set up ScriptProcessorNode for clean, continuous PCM capture
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      const silentGain = audioCtx.createGain();
+      silentGain.gain.value = 0;
+
+      processor.onaudioprocess = (e) => {
+        if (!isListeningRef.current) return;
+        const channelData = e.inputBuffer.getChannelData(0);
+        const copy = new Float32Array(channelData);
+
+        // Always accumulate audio while microphone is active
+        pcmChunksRef.current.push(copy);
+
+        // Calculate accurate RMS energy of the current audio block
+        let sumSq = 0;
+        for (let i = 0; i < channelData.length; i++) {
+          sumSq += channelData[i] * channelData[i];
+        }
+        const rms = Math.sqrt(sumSq / channelData.length);
+
+        // Voice Activity Detection threshold
+        if (rms > 0.012) {
+          hasSpokenRef.current = true;
+          silenceBlocksRef.current = 0;
+          setInterimText('Listening to your voice...');
+        } else if (hasSpokenRef.current) {
+          // User spoke and has now stopped speaking
+          silenceBlocksRef.current += 1;
+          // ~1.1s of silence (12 blocks of 4096 samples at ~44.1kHz)
+          if (silenceBlocksRef.current >= 12) {
+            stopListening();
+          }
+        }
+      };
+
+      source.connect(processor);
+      processor.connect(silentGain);
+      silentGain.connect(audioCtx.destination);
+
+      scriptProcessorRef.current = processor;
+      silentGainRef.current = silentGain;
+
+      // Start animation loop
+      animationFrameRef.current = requestAnimationFrame(updateWaveform);
+
+      setIsListening(true);
+      setInterimText('Listening... Speak your goal');
+
+      if (window.electronAPI) {
+        window.electronAPI.startAudio().catch(() => {});
+      }
+
+      // Hard timeout safeguard: auto-commit after 6 seconds of listening
+      listenTimerRef.current = setTimeout(() => {
+        if (isListeningRef.current) {
+          stopListening();
+        }
+      }, 6000);
+    } catch (err: any) {
+      console.error('Microphone access error:', err);
+      let msg = 'Could not access microphone.';
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        msg = 'Microphone permission denied. Please allow microphone access in Windows / System Settings.';
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        msg = 'No microphone device found on your computer.';
+      } else {
+        msg = err.message || 'Microphone error.';
+      }
+      setMicError(msg);
+      setIsListening(false);
+      isListeningRef.current = false;
+    }
+  }, [stopListening, updateWaveform]);
 
   const toggleListening = useCallback(() => {
-    if (isListening) {
+    if (isListeningRef.current || isListening) {
       stopListening();
     } else {
       startListening();

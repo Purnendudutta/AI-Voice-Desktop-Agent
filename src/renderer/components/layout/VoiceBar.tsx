@@ -57,7 +57,7 @@ export const VoiceBar: React.FC<VoiceBarProps> = ({
       {interimTranscript && (!interimTranscript.startsWith('Listening') || isRecording) && (
         <div
           className={`max-w-4xl mx-auto px-3.5 py-1.5 rounded-lg border text-xs flex items-center justify-between font-mono animate-in fade-in ${
-            interimTranscript.startsWith('Speech not recognized')
+            interimTranscript.startsWith('Speech not recognized') || interimTranscript.startsWith('No speech')
               ? 'bg-amber-950/80 border-amber-500/40 text-amber-300'
               : 'bg-cyan-950/80 border-cyan-500/40 text-cyan-300'
           }`}
@@ -89,7 +89,7 @@ export const VoiceBar: React.FC<VoiceBarProps> = ({
               ? 'bg-rose-500 text-white shadow-[0_0_20px_rgba(244,63,94,0.6)] animate-pulse'
               : 'bg-dark-800 hover:bg-slate-750 text-slate-300 border border-slate-700 hover:border-slate-600'
           }`}
-          title={isRecording ? 'Click to stop listening' : `Click to activate microphone and speak to ${agentName}`}
+          title={isRecording ? 'Listening (Red)... Speak your goal, or click again to stop and execute' : `Click to activate microphone and speak to ${agentName}`}
         >
           {isRecording ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5 text-slate-400" />}
         </button>
